@@ -1,92 +1,83 @@
-import pandas as pd
-from tabulate import tabulate
 import csv
 import genanki
+import re
 
-# Read the Markdown file
-with open('test.md', 'r') as file:
-    markdown_data = file.read()
+def create_anki_decks(markdown_file):
+    # Read the Markdown file
+    with open(markdown_file, 'r') as file:
+        markdown_data = file.read()
 
-#print(markdown_data)
+    # Split the Markdown data into sections based on "##" headers
+    sections = re.split(r'##', markdown_data)
 
-# Find the tables in the Markdown data
-tables = markdown_data.split('##')[1:]
+    # Iterate over each section
+    for section in sections:
+        # Extract the section name (deck name)
+        section_lines = section.strip().splitlines()
+        if not section_lines:
+            continue
+        
+        deck_name = section_lines[0].strip()
 
-#print(tables)
-csv_files = []
+        # Extract the table data within the section
+        table_data = re.search(r'\|.*\|.*\|\n([\s\S]*?)\n\n', section)
 
-# Process each table
-for i, table in enumerate(tables):
-    # Extract the table data
-    rows = [row.split('|')[1:-1] for row in table.strip().split('\n')[2:]]
-
-    # Create a pandas DataFrame from the table data
-    df = pd.DataFrame(rows, columns=['Accro', 'Description'])
-    df = df.iloc[2:]
-    # Save the DataFrame as a CSV file
-    filename = f'table_{i+1}.csv'
-    df.to_csv(filename, index=False)
-    csv_files.append(filename)
-
-print(csv_files)
-
-def create_anki_deck(csv_file, deck_name):
-    # Read the CSV file
-    with open(csv_file, 'r') as file:
-        csv_data = list(csv.reader(file))
-
-    # Create an empty list to hold all the notes
-    all_notes = []
-
-    # Iterate over each line of the CSV data
-    for i, row in enumerate(csv_data):
-        # Skip the header row
-        if i == 0:
+        if not table_data:
             continue
 
-        # Extract the fields from the CSV row
-        accro, description = row
+        # Convert the table to CSV format
+        csv_data = list(csv.reader(table_data.group(1).strip().split('\n')))
 
-        # Create an Anki Model
-        model_id = hash(accro)
-        model_name = f"Model_{i}"
-        model_fields = [
-            {"name": "Accro"},
-            {"name": "Description"}
-        ]
-        model_templates = [
-            {
-                "name": "Card 1",
-                "qfmt": "{{Accro}}",
-                "afmt": "{{FrontSide}}<hr id='answer'>{{Description}}"
-            }
-        ]
-        model = genanki.Model(model_id, model_name, fields=model_fields, templates=model_templates)
+        # Create an empty list to hold all the notes
+        all_notes = []
 
-        # Create an Anki Note
-        note = genanki.Note(
-            model=model,
-            fields=[accro, description]
-        )
+        # Iterate over each line of the CSV data
+        for row in csv_data:
+            # Skip the header row
+            if row[0] == "Accro":
+                continue
 
-        # Add the note to the list of all notes
-        all_notes.append(note)
+            # Extract the fields from the CSV row
+            accro = row[0].strip()
+            description = row[1].strip() if len(row) > 1 else ""
 
-    # Create an Anki Deck and add all the notes
-    deck_id = hash(deck_name)
-    deck = genanki.Deck(deck_id, deck_name)
-    for note in all_notes:
-        deck.add_note(note)
+            # Create an Anki Model
+            model_id = hash(accro)
+            model_name = f"Model_{deck_name}"
+            model_fields = [
+                {"name": "Accro"},
+                {"name": "Description"}
+            ]
+            model_templates = [
+                {
+                    "name": "Card 1",
+                    "qfmt": "{{Accro}}",
+                    "afmt": "{{FrontSide}}<hr id='answer'>{{Description}}"
+                }
+            ]
+            model = genanki.Model(model_id, model_name, fields=model_fields, templates=model_templates)
 
-    # Generate the Anki Package
-    package = genanki.Package(deck)
+            # Create an Anki Note
+            note = genanki.Note(
+                model=model,
+                fields=[accro, description]
+            )
 
-    # Save the Anki Package to a file
-    filename = f"{deck_name}.apkg"
-    package.write_to_file(filename)
+            # Add the note to the list of all notes
+            all_notes.append(note)
 
-# Call the function for each CSV file
+        # Create an Anki Deck and add all the notes
+        deck_id = hash(deck_name)
+        deck = genanki.Deck(deck_id, deck_name)
+        for note in all_notes:
+            deck.add_note(note)
 
-for file in csv_files:
-    deck_name = file.split('.')[0]
-    create_anki_deck(file, deck_name)
+        # Generate the Anki Package
+        package = genanki.Package(deck)
+
+        # Save the Anki Package to a file
+        filename = f"{deck_name}.apkg"
+        package.write_to_file(filename)
+
+# Call the function with the Markdown file path
+create_anki_decks("your_markdown_file.md")
